@@ -13,12 +13,10 @@ class Random_generator:
     'abcdefghijklmnopqrstuvwxyz'
     'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
     )):
-        # SECURITY FIX: replaced random.choice with secrets.choice
         return ''.join(secrets.choice(alphabet) for i in range(length))
 
     # generates salt using bcrypt's built-in gensalt()
     def generate_salt(self, rounds=12):
-        # SECURITY FIX: replaced manual salt generation with bcrypt.gensalt()
         return bcrypt.gensalt(rounds)
 
 class SHA256_hasher:
@@ -35,15 +33,14 @@ class SHA256_hasher:
         return bcrypt.checkpw(password, password_hash)
 
 class MD5_hasher:
-    # SECURITY FIX: MD5 is cryptographically broken for password hashing.
-    # Replaced MD5 with SHA256 internally while keeping the same interface
-    # for backwards compatibility. Use SHA256_hasher directly for new code.
+    # SECURITY FIX: Replaced broken MD5 with bcrypt for secure password hashing.
+    # Interface preserved for backwards compatibility.
     def password_hash(self, password):
-        return hashlib.sha256(password.encode()).hexdigest()
+        salt = bcrypt.gensalt()
+        return bcrypt.hashpw(password.encode(), salt).decode('ascii')
 
     def password_verification(self, password, password_hash):
-        password = self.password_hash(password)
-        return secrets.compare_digest(password.encode(), password_hash.encode())
+        return bcrypt.checkpw(password.encode(), password_hash.encode('ascii'))
 
 # a collection of sensitive secrets necessary for the software to operate
 PRIVATE_KEY = os.environ.get('PRIVATE_KEY')

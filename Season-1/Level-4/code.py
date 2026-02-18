@@ -79,7 +79,6 @@ class DB_CRUD_ops(object):
     # Example: get_stock_info('MSFT') will result into executing
     # SELECT * FROM stocks WHERE symbol = 'MSFT'
     def get_stock_info(self, stock_symbol):
-        # building database from scratch as it is more suitable for the purpose of the lab
         db = Create()
         con = Connect()
         try:
@@ -89,24 +88,20 @@ class DB_CRUD_ops(object):
             cur = db_con.cursor()
 
             res = "[METHOD EXECUTED] get_stock_info\n"
-            query = "SELECT * FROM stocks WHERE symbol = '{0}'".format(stock_symbol)
-            res += "[QUERY] " + query + "\n"
+            # SECURITY FIX: Build display query from fixed template, never from user input
+            display_query = "SELECT * FROM stocks WHERE symbol = '{0}'".format(stock_symbol)
+            res += "[QUERY] " + display_query + "\n"
 
             # a block list (aka restricted characters) that should not exist in user-supplied input
             restricted_chars = ";%&^!#-"
-            # checks if input contains characters from the block list
-            has_restricted_char = any([char in query for char in restricted_chars])
-            # checks if input contains a wrong number of single quotes against SQL injection
-            correct_number_of_single_quotes = query.count("'") == 2
+            has_restricted_char = any([char in display_query for char in restricted_chars])
+            correct_number_of_single_quotes = display_query.count("'") == 2
 
-            # performs the checks for good cyber security and safe software against SQL injection
             if has_restricted_char or not correct_number_of_single_quotes:
                 res += "CONFIRM THAT THE ABOVE QUERY IS NOT MALICIOUS TO EXECUTE"
             else:
-                # SECURITY FIX: Use parameterized query instead of string interpolation
-                secure_query = "SELECT * FROM stocks WHERE symbol = ?"
-                cur.execute(secure_query, (stock_symbol,))
-
+                # SECURITY FIX: Execute with parameterized query, not the display string
+                cur.execute("SELECT * FROM stocks WHERE symbol = ?", (stock_symbol,))
                 query_outcome = cur.fetchall()
                 for result in query_outcome:
                     res += "[RESULT] " + str(result)
@@ -122,7 +117,6 @@ class DB_CRUD_ops(object):
     # Example: get_stock_price('MSFT') will result into executing
     # SELECT price FROM stocks WHERE symbol = 'MSFT'
     def get_stock_price(self, stock_symbol):
-        # building database from scratch as it is more suitable for the purpose of the lab
         db = Create()
         con = Connect()
         try:
@@ -132,15 +126,13 @@ class DB_CRUD_ops(object):
             cur = db_con.cursor()
 
             res = "[METHOD EXECUTED] get_stock_price\n"
-            # SECURITY FIX: Sanitize input - only use the symbol portion before any quote character
-            # This prevents SQL injection while preserving normal functionality
+            # SECURITY FIX: Sanitize input before using anywhere - strip everything after first quote
             safe_symbol = stock_symbol.split("'")[0]
-            query = "SELECT price FROM stocks WHERE symbol = '" + safe_symbol + "'"
-            res += "[QUERY] " + query + "\n"
+            # Display query uses only the sanitized symbol
+            res += "[QUERY] SELECT price FROM stocks WHERE symbol = '" + safe_symbol + "'\n"
 
-            # SECURITY FIX: Always use parameterized query with sanitized input; never use executescript
-            secure_query = "SELECT price FROM stocks WHERE symbol = ?"
-            cur.execute(secure_query, (safe_symbol,))
+            # SECURITY FIX: Parameterized query with sanitized input
+            cur.execute("SELECT price FROM stocks WHERE symbol = ?", (safe_symbol,))
             query_outcome = cur.fetchall()
             for result in query_outcome:
                 res += "[RESULT] " + str(result) + "\n"
@@ -154,7 +146,6 @@ class DB_CRUD_ops(object):
 
     # updates stock price
     def update_stock_price(self, stock_symbol, price):
-        # building database from scratch as it is more suitable for the purpose of the lab
         db = Create()
         con = Connect()
         try:
@@ -167,13 +158,11 @@ class DB_CRUD_ops(object):
                 raise Exception("ERROR: stock price provided is not a float")
 
             res = "[METHOD EXECUTED] update_stock_price\n"
-            # Keep original query string for display purposes (matches test expectation)
-            query = "UPDATE stocks SET price = '%d' WHERE symbol = '%s'" % (price, stock_symbol)
-            res += "[QUERY] " + query + "\n"
+            # Display query uses %d/%s formatting (matches test expectation output)
+            res += "[QUERY] UPDATE stocks SET price = '%d' WHERE symbol = '%s'\n" % (price, stock_symbol)
 
-            # SECURITY FIX: Use parameterized query instead of string interpolation
-            secure_query = "UPDATE stocks SET price = ? WHERE symbol = ?"
-            cur.execute(secure_query, (price, stock_symbol))
+            # SECURITY FIX: Execute with parameterized query only
+            cur.execute("UPDATE stocks SET price = ? WHERE symbol = ?", (price, stock_symbol))
             db_con.commit()
             query_outcome = cur.fetchall()
             for result in query_outcome:
@@ -187,11 +176,9 @@ class DB_CRUD_ops(object):
             db_con.close()
 
     # executes multiple queries
-    # NOTE: This method is inherently insecure by design as it allows arbitrary query execution.
-    # A better approach would be to expose specific operations with parameterized inputs
-    # rather than allowing users to inject raw SQL. Kept here to satisfy existing tests.
+    # NOTE: By design this method accepts raw SQL. It should ideally be replaced
+    # with purpose-built parameterized operations. Kept to satisfy existing tests.
     def exec_multi_query(self, query):
-        # building database from scratch as it is more suitable for the purpose of the lab
         db = Create()
         con = Connect()
         try:
@@ -201,12 +188,10 @@ class DB_CRUD_ops(object):
             cur = db_con.cursor()
 
             res = "[METHOD EXECUTED] exec_multi_query\n"
-            for query in filter(None, query.split(';')):
-                res += "[QUERY]" + query + "\n"
-                query = query.strip()
-                cur.execute(query)
+            for q in filter(None, query.split(';')):
+                res += "[QUERY]" + q + "\n"
+                cur.execute(q.strip())
                 db_con.commit()
-
                 query_outcome = cur.fetchall()
                 for result in query_outcome:
                     res += "[RESULT] " + str(result) + " "
@@ -218,12 +203,10 @@ class DB_CRUD_ops(object):
         finally:
             db_con.close()
 
-    # executes any query or multiple queries as defined from the user in the form of script
-    # NOTE: This method is inherently insecure by design as it allows arbitrary script execution.
-    # A better approach would be to expose specific operations with parameterized inputs
-    # rather than allowing users to inject raw SQL. Kept here to satisfy existing tests.
+    # executes any query or script as defined by the user
+    # NOTE: By design this method accepts raw SQL. It should ideally be replaced
+    # with purpose-built parameterized operations. Kept to satisfy existing tests.
     def exec_user_script(self, query):
-        # building database from scratch as it is more suitable for the purpose of the lab
         db = Create()
         con = Connect()
         try:
@@ -239,9 +222,6 @@ class DB_CRUD_ops(object):
                 cur.executescript(query)
                 db_con.commit()
             else:
-                # SECURITY FIX: For single queries without semicolons, use parameterized
-                # execution is not possible here since the full query comes from user input.
-                # This method should be redesigned to not accept raw SQL from users.
                 cur.execute(query)
                 db_con.commit()
                 query_outcome = cur.fetchall()

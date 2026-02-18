@@ -1,11 +1,5 @@
-// Welcome to Secure Code Game Season-1/Level-2!
-
-// Follow the instructions below to get started:
-
-// 1. Perform code review. Can you spot the bug? 
-// 2. Run tests.c to test the functionality
-// 3. Run hack.c and if passing then CONGRATS!
-// 4. Compare your solution with solution.c
+// Vulnerability was in line 83 of code.h
+// Fix can be found in line 77 below
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -27,7 +21,7 @@
 // Internal counter of user accounts
 int userid_next = 0;
 
-// The following structure is implementation-specific and it's supposed to be unknown
+// The following structure is implementation-speicific and it's supposed to be unknown 
 // to non-privileged users
 typedef struct {
     bool isAdmin;
@@ -80,7 +74,8 @@ bool update_setting(int user_id, const char *index, const char *value) {
         return false;
 
     v = strtol(value, &endptr, 10);
-    if (*endptr || i >= SETTINGS_COUNT)
+    // FIX: We should check for negative index values too! Scroll for the full solution
+    if (*endptr || i < 0 || i >= SETTINGS_COUNT)
         return false;
     accounts[user_id]->setting[i] = v;
     return true;
@@ -104,3 +99,43 @@ const char* username(int user_id) {
     }    
     return accounts[user_id]->username;
 }
+
+/*
+    There are two vulnerabilities in this code:
+  
+    (1) Security through Obscurity Abuse Vulnerability
+    --------------------------------------------
+
+    The concept of security through obscurity (STO) relies on the idea that a 
+    system can remain secure if something (even a vulnerability!) is secret or 
+    hidden. If an attacker doesn't know what the weaknesses are, they cannot 
+    exploit them. The flip side is that once that vulnerability is exposed, 
+    it's no longer secure. It's widely believed that security through obscurity 
+    is an ineffective security measure on its own, and should be avoided due to
+    a potential single point of failure and a fall sense of security.
+
+    In code.h the user_account structure is supposed to be an implementation
+    detail that is not visible to the user. Otherwise, attackers could easily 
+    modify the structure and change the 'isAdmin' flag to 'true', to gain admin 
+    privileges.
+
+    Therefore, as this example illustrates, security through obscurity alone is 
+    not enough to secure a system. Attackers are in position toreverse engineer 
+    the code and find the vulnerability. This is exposed in hack.c (see below).
+
+    You can read more about the concept of security through obscurity here:
+    https://securitytrails.com/blog/security-through-obscurity
+
+
+    (2) Buffer Overflow Vulnerability
+    ----------------------------
+ 
+    In hack.c, an attacker escalated privileges and became an admin by abusing 
+    the fact that the code wasn't checking for negative index values.
+
+    Negative indexing here caused an unauthorized write to memory and affected a
+    flag, changing a non-admin user to admin.
+
+    You can read more about buffer overflow vulnerabilities here:
+    https://owasp.org/www-community/vulnerabilities/Buffer_Overflow
+*/

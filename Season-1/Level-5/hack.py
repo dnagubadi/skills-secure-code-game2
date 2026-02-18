@@ -1,4 +1,4 @@
-# For this level check the CodeQL alerts produced by GitHub code scanning.
+pytho# For this level check the CodeQL alerts produced by GitHub code scanning.
 
 # Enable CodeQL [Text]: https://github.co/3rOmI2k
 # Enable CodeQL [Video]: https://youtu.be/MdRvrbExaFk

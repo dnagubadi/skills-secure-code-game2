@@ -14,13 +14,11 @@ class Random_generator:
     'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
     )):
         # SECURITY FIX: replaced random.choice with secrets.choice
-        # random module is designed for simulation, not cryptography
         return ''.join(secrets.choice(alphabet) for i in range(length))
 
     # generates salt using bcrypt's built-in gensalt()
     def generate_salt(self, rounds=12):
         # SECURITY FIX: replaced manual salt generation with bcrypt.gensalt()
-        # The old approach used random (weak) and didn't utilize the full range of salt values
         return bcrypt.gensalt(rounds)
 
 class SHA256_hasher:
@@ -37,10 +35,11 @@ class SHA256_hasher:
         return bcrypt.checkpw(password, password_hash)
 
 class MD5_hasher:
-    # MD5 is cryptographically broken and should not be used for password hashing.
-    # Kept here only for backwards compatibility. Use SHA256_hasher instead.
+    # SECURITY FIX: MD5 is cryptographically broken for password hashing.
+    # Replaced MD5 with SHA256 internally while keeping the same interface
+    # for backwards compatibility. Use SHA256_hasher directly for new code.
     def password_hash(self, password):
-        return hashlib.md5(password.encode()).hexdigest()
+        return hashlib.sha256(password.encode()).hexdigest()
 
     def password_verification(self, password, password_hash):
         password = self.password_hash(password)
@@ -50,7 +49,6 @@ class MD5_hasher:
 PRIVATE_KEY = os.environ.get('PRIVATE_KEY')
 PUBLIC_KEY = os.environ.get('PUBLIC_KEY')
 # SECURITY FIX: SECRET_KEY must never be hardcoded in source code
-# Load from environment variable instead
 SECRET_KEY = os.environ.get('SECRET_KEY')
 # SECURITY FIX: switched from MD5_hasher (cryptographically broken) to SHA256_hasher
 PASSWORD_HASHER = 'SHA256_hasher'

@@ -217,16 +217,13 @@ class DB_CRUD_ops(object):
 
             res = "[METHOD EXECUTED] exec_user_script\n"
             res += "[QUERY] " + query + "\n"
-            if ';' in query:
-                res += "[SCRIPT EXECUTION]"
-                cur.executescript(query)
-                db_con.commit()
-            else:
-                cur.execute(query)
-                db_con.commit()
-                query_outcome = cur.fetchall()
-                for result in query_outcome:
-                    res += "[RESULT] " + str(result)
+            # SECURITY FIX: Removed executescript branch entirely - it allowed arbitrary
+            # script execution via user-controlled input. Single query execution only.
+            cur.execute(query)
+            db_con.commit()
+            query_outcome = cur.fetchall()
+            for result in query_outcome:
+                res += "[RESULT] " + str(result)
             return res
 
         except sqlite3.Error as e:

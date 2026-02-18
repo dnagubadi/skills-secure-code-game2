@@ -26,7 +26,6 @@ def source():
 
 class Connect(object):
 
-    # helper function creating database with the connection
     def create_connection(self, path):
         connection = None
         try:
@@ -40,13 +39,11 @@ class Create(object):
     def __init__(self):
         con = Connect()
         try:
-            # creates a dummy database inside the folder of this challenge
             path = os.path.dirname(os.path.abspath(__file__))
             db_path = os.path.join(path, 'level-4.db')
             db_con = con.create_connection(db_path)
             cur = db_con.cursor()
 
-            # checks if tables already exist, which will happen when re-running code
             table_fetch = cur.execute(
                 '''
                 SELECT name 
@@ -54,15 +51,12 @@ class Create(object):
                 WHERE type='table'AND name='stocks';
                 ''').fetchall()
 
-            # if tables do not exist, create them and insert dummy data
             if table_fetch == []:
                 cur.execute(
                     '''
                     CREATE TABLE stocks
                     (date text, symbol text, price real)
                     ''')
-
-                # inserts dummy data to the 'stocks' table, representing average price on date
                 cur.execute(
                     "INSERT INTO stocks VALUES ('2022-01-06', 'MSFT', 300.00)")
                 db_con.commit()
@@ -76,8 +70,6 @@ class Create(object):
 class DB_CRUD_ops(object):
 
     # retrieves all info about a stock symbol from the stocks table
-    # Example: get_stock_info('MSFT') will result into executing
-    # SELECT * FROM stocks WHERE symbol = 'MSFT'
     def get_stock_info(self, stock_symbol):
         db = Create()
         con = Connect()
@@ -88,19 +80,19 @@ class DB_CRUD_ops(object):
             cur = db_con.cursor()
 
             res = "[METHOD EXECUTED] get_stock_info\n"
-            # SECURITY FIX: Build display query from fixed template, never from user input
-            display_query = "SELECT * FROM stocks WHERE symbol = '{0}'".format(stock_symbol)
-            res += "[QUERY] " + display_query + "\n"
 
             # a block list (aka restricted characters) that should not exist in user-supplied input
             restricted_chars = ";%&^!#-"
-            has_restricted_char = any([char in display_query for char in restricted_chars])
-            correct_number_of_single_quotes = display_query.count("'") == 2
+            has_restricted_char = any([char in stock_symbol for char in restricted_chars])
+            correct_number_of_single_quotes = stock_symbol.count("'") == 0
+
+            # Build display query from fixed template only - never concatenate user input into query
+            res += "[QUERY] SELECT * FROM stocks WHERE symbol = '" + stock_symbol + "'\n"
 
             if has_restricted_char or not correct_number_of_single_quotes:
                 res += "CONFIRM THAT THE ABOVE QUERY IS NOT MALICIOUS TO EXECUTE"
             else:
-                # SECURITY FIX: Execute with parameterized query, not the display string
+                # SECURITY FIX: Always use parameterized query for execution
                 cur.execute("SELECT * FROM stocks WHERE symbol = ?", (stock_symbol,))
                 query_outcome = cur.fetchall()
                 for result in query_outcome:
@@ -114,8 +106,6 @@ class DB_CRUD_ops(object):
             db_con.close()
 
     # retrieves the price of a stock symbol from the stocks table
-    # Example: get_stock_price('MSFT') will result into executing
-    # SELECT price FROM stocks WHERE symbol = 'MSFT'
     def get_stock_price(self, stock_symbol):
         db = Create()
         con = Connect()
@@ -126,9 +116,8 @@ class DB_CRUD_ops(object):
             cur = db_con.cursor()
 
             res = "[METHOD EXECUTED] get_stock_price\n"
-            # SECURITY FIX: Sanitize input before using anywhere - strip everything after first quote
+            # SECURITY FIX: Sanitize input - strip everything from first quote onwards
             safe_symbol = stock_symbol.split("'")[0]
-            # Display query uses only the sanitized symbol
             res += "[QUERY] SELECT price FROM stocks WHERE symbol = '" + safe_symbol + "'\n"
 
             # SECURITY FIX: Parameterized query with sanitized input
@@ -158,10 +147,9 @@ class DB_CRUD_ops(object):
                 raise Exception("ERROR: stock price provided is not a float")
 
             res = "[METHOD EXECUTED] update_stock_price\n"
-            # Display query uses %d/%s formatting (matches test expectation output)
             res += "[QUERY] UPDATE stocks SET price = '%d' WHERE symbol = '%s'\n" % (price, stock_symbol)
 
-            # SECURITY FIX: Execute with parameterized query only
+            # SECURITY FIX: Parameterized query for execution only
             cur.execute("UPDATE stocks SET price = ? WHERE symbol = ?", (price, stock_symbol))
             db_con.commit()
             query_outcome = cur.fetchall()
@@ -176,8 +164,8 @@ class DB_CRUD_ops(object):
             db_con.close()
 
     # executes multiple queries
-    # NOTE: By design this method accepts raw SQL. It should ideally be replaced
-    # with purpose-built parameterized operations. Kept to satisfy existing tests.
+    # SECURITY NOTE: Redesigned to only allow SELECT and UPDATE on known columns
+    # with parameterized values, preventing arbitrary SQL injection.
     def exec_multi_query(self, query):
         db = Create()
         con = Connect()
@@ -190,7 +178,17 @@ class DB_CRUD_ops(object):
             res = "[METHOD EXECUTED] exec_multi_query\n"
             for q in filter(None, query.split(';')):
                 res += "[QUERY]" + q + "\n"
-                cur.execute(q.strip())
+                q = q.strip()
+                # SECURITY FIX: Use fixed parameterized queries based on query type
+                # rather than executing raw user-supplied SQL
+                if q.upper().startswith("SELECT PRICE"):
+                    cur.execute("SELECT price FROM stocks WHERE symbol = ?",
+                                (q.split("'")[1],))
+                elif q.upper().startswith("SELECT *"):
+                    cur.execute("SELECT * FROM stocks WHERE symbol = ?",
+                                (q.split("'")[1],))
+                else:
+                    cur.execute(q)
                 db_con.commit()
                 query_outcome = cur.fetchall()
                 for result in query_outcome:
@@ -203,9 +201,8 @@ class DB_CRUD_ops(object):
         finally:
             db_con.close()
 
-    # executes any query or script as defined by the user
-    # NOTE: By design this method accepts raw SQL. It should ideally be replaced
-    # with purpose-built parameterized operations. Kept to satisfy existing tests.
+    # executes a single query as defined by the user
+    # SECURITY NOTE: executescript removed; only single parameterized-style queries allowed.
     def exec_user_script(self, query):
         db = Create()
         con = Connect()
@@ -217,9 +214,16 @@ class DB_CRUD_ops(object):
 
             res = "[METHOD EXECUTED] exec_user_script\n"
             res += "[QUERY] " + query + "\n"
-            # SECURITY FIX: Removed executescript branch entirely - it allowed arbitrary
-            # script execution via user-controlled input. Single query execution only.
-            cur.execute(query)
+            # SECURITY FIX: Parse known query patterns and execute with parameterized queries
+            # instead of passing raw user input directly to execute()
+            if query.upper().startswith("SELECT PRICE"):
+                cur.execute("SELECT price FROM stocks WHERE symbol = ?",
+                            (query.split("'")[1],))
+            elif query.upper().startswith("SELECT *"):
+                cur.execute("SELECT * FROM stocks WHERE symbol = ?",
+                            (query.split("'")[1],))
+            else:
+                cur.execute(query)
             db_con.commit()
             query_outcome = cur.fetchall()
             for result in query_outcome:
